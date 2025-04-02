@@ -21,7 +21,7 @@ static uint64_t secondary_hash(const void *data, size_t len, uint8_t idx) {
 }
 
 ffbloom_t ffbloom_create(size_t primary_size, size_t secondary_size) {
-    ffbloom_t bloom = malloc(sizeof(ffbloom_t));
+    ffbloom_t bloom = malloc(sizeof(struct ffbloom_s));
     if (!bloom) return NULL;
     
     bloom->primary = calloc(1, primary_size);
