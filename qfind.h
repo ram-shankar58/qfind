@@ -15,9 +15,10 @@
 #include <sys/inotify.h>
 #include <sys/types.h>  
 #include <sys/wait.h> //for idtype_t
+#include <time.h>
 
 
-/* Constants */
+
 #define BLOOM_SIZE (1 << 25)         // 32MB primary bloom filter
 #define BLOOM_SEC_SIZE (1 << 24)     // 16MB secondary bloom filter
 #define MAX_HASH_FUNCS 8             // Number of hash functions for Bloom filter
@@ -28,18 +29,9 @@
 #define MAX_RESULTS 10000            // Maximum results to return
 #define IO_RINGSIZE 1024             // Size of io_uring queue
 
-/* Type definitions */
 typedef uint64_t file_id_t;
 typedef uint32_t trigram_t;
-
-/* Feed-Forward Bloom Filter */
-typedef struct {
-    uint8_t *primary;                // Primary bit array
-    uint8_t *secondary;              // Secondary (history) bit array
-    size_t primary_size;             // Size of primary filter in bytes
-    size_t secondary_size;           // Size of secondary filter in bytes
-    uint8_t num_hash_funcs;          // Number of hash functions
-} *ffbloom_t;
+typedef struct ffbloom_s *ffbloom_t; //adding to fix compilation errors in bottom up way
 
 /* Compressed Inverted Index Entry */
 typedef struct {
@@ -106,6 +98,7 @@ typedef struct {
     gid_t group_id;                  // Group ID for permission filtering
 } query_ctx_t;
 
+
 /* Function Prototypes */
 
 /* Initialization and cleanup */
@@ -125,10 +118,10 @@ int qfind_get_results(query_ctx_t *query, file_metadata_t *results, uint32_t *nu
 
 /* Bloom filter operations */
 ffbloom_t* ffbloom_create(size_t primary_size, size_t secondary_size);
-void ffbloom_destroy(ffbloom_t *bloom);
-void ffbloom_add(ffbloom_t *bloom, const void *data, size_t len);
-bool ffbloom_check(ffbloom_t *bloom, const void *data, size_t len);
-void ffbloom_update_secondary(ffbloom_t *bloom, const void *data, size_t len);
+void ffbloom_destroy(ffbloom_t* bloom);
+void ffbloom_add(ffbloom_t* bloom, const void *data, size_t len);
+bool ffbloom_check(ffbloom_t* bloom, const void *data, size_t len);
+void ffbloom_update_secondary(ffbloom_t* bloom, const void *data, size_t len);
 
 /* Trigram operations */
 void extract_trigrams(const char *str, trigram_t *trigrams, uint32_t *count);

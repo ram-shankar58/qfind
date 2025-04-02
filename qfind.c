@@ -4,6 +4,20 @@
 #include <errno.h>
 #include <stdlib.h>
 
+qfind_index_t* qfind_init(void) {
+    qfind_index_t *index = calloc(1, sizeof(qfind_index_t));
+    index->bloom = ffbloom_create(BLOOM_SIZE, BLOOM_SEC_SIZE);
+    return index;
+}
+
+void qfind_destroy(qfind_index_t *index) {
+    if (!index) return;
+    ffbloom_destroy(index->bloom);
+    free(index->entries);
+    free(index->compressed_data);
+    free(index);
+}
+
 static int traverse_directory(qfind_index_t *index, const char *path) {
     DIR *dir = opendir(path);
     if (!dir) {
