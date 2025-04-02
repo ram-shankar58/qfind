@@ -39,7 +39,7 @@ typedef struct {
     size_t primary_size;             // Size of primary filter in bytes
     size_t secondary_size;           // Size of secondary filter in bytes
     uint8_t num_hash_funcs;          // Number of hash functions
-} ffbloom_t;
+} *ffbloom_t;
 
 /* Compressed Inverted Index Entry */
 typedef struct {
