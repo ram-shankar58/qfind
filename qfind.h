@@ -13,6 +13,9 @@
 #include <unistd.h>
 #include <linux/limits.h>
 #include <sys/inotify.h>
+#include <sys/types.h>  
+#include <sys/wait.h> //for idtype_t
+
 
 /* Constants */
 #define BLOOM_SIZE (1 << 25)         // 32MB primary bloom filter
@@ -113,6 +116,8 @@ void qfind_destroy(qfind_index_t *index);
 int qfind_build_index(qfind_index_t *index, const char *root_path);
 int qfind_update_index(qfind_index_t *index, const char *path, bool is_add);
 int qfind_commit_updates(qfind_index_t *index);
+int add_file_to_index(qfind_index_t *index, const char *path, file_id_t file_id);
+int compress_posting_lists(qfind_index_t *index);
 
 /* Search operations */
 int qfind_search(qfind_index_t *index, query_ctx_t *query);

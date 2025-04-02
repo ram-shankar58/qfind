@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
+#include <fcntl.h>
+
 
 #define VERSION "1.0.0"
 
