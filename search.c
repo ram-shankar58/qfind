@@ -121,13 +121,13 @@ int qfind_search(qfind_index_t *index, query_ctx_t *query) {
     
     // Check bloom filter for each trigram
     for (uint32_t i = 0; i < trigram_count; i++) {
-        if (!ffbloom_check(&index->bloom, &trigrams[i], sizeof(trigram_t))) {
+        if (!ffbloom_check(index->bloom, &trigrams[i], sizeof(trigram_t))) {
             // This trigram is definitely not in the index
             return 0;  // No results
         }
         
         // Update secondary bloom filter
-        ffbloom_update_secondary(&index->bloom, &trigrams[i], sizeof(trigram_t));
+        ffbloom_update_secondary(index->bloom, &trigrams[i], sizeof(trigram_t));
     }
     
     // Allocate result buffer

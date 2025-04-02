@@ -104,7 +104,7 @@ int add_file_to_index(qfind_index_t *index, const char *path, file_id_t file_id)
     
     // Update bloom filter with all trigrams
     for (uint32_t i = 0; i < trigram_count; i++) {
-        ffbloom_add(&index->bloom, &trigrams[i], sizeof(trigram_t));
+        ffbloom_add(index->bloom, &trigrams[i], sizeof(trigram_t));
     }
     
     // Add file path to the trie for short query support

@@ -117,11 +117,11 @@ int qfind_search(qfind_index_t *index, query_ctx_t *query);
 int qfind_get_results(query_ctx_t *query, file_metadata_t *results, uint32_t *num_results);
 
 /* Bloom filter operations */
-ffbloom_t* ffbloom_create(size_t primary_size, size_t secondary_size);
-void ffbloom_destroy(ffbloom_t* bloom);
-void ffbloom_add(ffbloom_t* bloom, const void *data, size_t len);
-bool ffbloom_check(ffbloom_t* bloom, const void *data, size_t len);
-void ffbloom_update_secondary(ffbloom_t* bloom, const void *data, size_t len);
+ffbloom_t ffbloom_create(size_t primary_size, size_t secondary_size);
+void ffbloom_destroy(ffbloom_t bloom);
+void ffbloom_add(ffbloom_t bloom, const void *data, size_t len);
+bool ffbloom_check(ffbloom_t bloom, const void *data, size_t len);
+void ffbloom_update_secondary(ffbloom_t bloom, const void *data, size_t len);
 
 /* Trigram operations */
 void extract_trigrams(const char *str, trigram_t *trigrams, uint32_t *count);
