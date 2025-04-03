@@ -1,6 +1,7 @@
 #ifndef QFIND_H
 #define QFIND_H
 
+#include <time.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -13,10 +14,12 @@
 #include <unistd.h>
 #include <linux/limits.h>
 #include <sys/inotify.h>
-#include <sys/types.h>  
-#include <sys/wait.h> //for idtype_t
-#include <time.h>
-
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/poll.h>
+#include <syslog.h>
+#include <dirent.h>
+#include <uthash.h>
 
 
 #define BLOOM_SIZE (1 << 25)         // 32MB primary bloom filter
@@ -28,10 +31,20 @@
 #define INDEX_BLOCK_SIZE (1 << 16)   // 64KB blocks for inverted index
 #define MAX_RESULTS 10000            // Maximum results to return
 #define IO_RINGSIZE 1024             // Size of io_uring queue
+#define DT_DIR 4  // From dirent.h
+#define POLLIN 0x001  // From sys/poll.h
+#define MAX_REG_BUFFERS 1024
+#define CQE_BATCH_SIZE 32
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+
+
 
 typedef uint64_t file_id_t;
 typedef uint32_t trigram_t;
-typedef struct ffbloom_s *ffbloom_t; //adding to fix compilation errors in bottom up way
+
+/* Opaque Bloom filter type */
+struct ffbloom_s;  // Forward declaration
+typedef struct ffbloom_s *ffbloom_t;
 
 /* Compressed Inverted Index Entry */
 typedef struct {
@@ -48,12 +61,29 @@ typedef struct {
 } posting_t;
 
 /* Suffix Trie Node for short queries */
+
+// typedef struct trie_node {
+//     char key;
+//     bool is_end;
+//     file_id_t file_id;
+//     struct trie_node *children[256];
+//     uint32_t num_children;
+//     uint32_t count;  // Add this line
+// } trie_node_t;
+
+typedef struct posting_buffer {
+    uint32_t *deltas;
+    size_t capacity;
+    size_t count;
+} posting_buffer_t;
+
 typedef struct trie_node {
-    char key;                        // Character at this node
-    bool is_end;                     // Is this the end of a file path?
-    file_id_t file_id;               // File ID if is_end is true
-    struct trie_node *children[256]; // Children nodes (one per possible byte)
-    uint16_t num_children;           // Number of children
+    unsigned char key;
+    bool is_end;
+    file_id_t file_id;
+    struct trie_node *children[256];
+    uint32_t num_children;
+    uint32_t count;
 } trie_node_t;
 
 /* File Metadata */
@@ -65,12 +95,29 @@ typedef struct {
 } file_metadata_t;
 
 /* io_uring Context */
+typedef struct io_cqe {
+    uint64_t user_data;
+    int32_t res;
+    uint32_t flags;
+} io_cqe_t;
+
 typedef struct {
-    struct io_uring ring;            // io_uring instance
-    void **registered_buffers;       // Pre-registered buffers
-    int num_buffers;                 // Number of registered buffers
-    bool use_sqpoll;                 // Whether to use SQPOLL feature
+    void *buf;
+    size_t len;
+    int refcount;
+    int kernel_idx;
+} reg_buffer_t;
+
+typedef struct {
+    struct io_uring ring;
+    reg_buffer_t buffers[MAX_REG_BUFFERS];
+    int num_buffers;
+    pthread_spinlock_t buffer_lock;
+    bool use_sqpoll;
 } io_context_t;
+
+
+
 
 /* Main Index Structure */
 typedef struct {
@@ -79,6 +126,7 @@ typedef struct {
     uint32_t num_entries;            // Number of index entries
     void *compressed_data;           // Compressed posting lists
     size_t compressed_size;          // Size of compressed data in bytes
+    size_t meta_capacity;
     trie_node_t *trie_root;          // Root of the suffix trie
     file_metadata_t *file_metadata;  // Array of file metadata
     uint32_t num_files;              // Number of files in the index
@@ -99,20 +147,37 @@ typedef struct {
 } query_ctx_t;
 
 
-/* Function Prototypes */
+typedef struct lsm_node {
+    file_id_t id;
+    char *path;
+    bool is_add;
+    struct lsm_node *next;
+} lsm_node_t;
 
-/* Initialization and cleanup */
+typedef struct lsm_batch {
+    lsm_node_t *head;
+    lsm_node_t *tail;
+    size_t count;
+    pthread_spinlock_t lock;
+} lsm_batch_t;
+
+
+
+
+#define INVALID_FILE_ID ((file_id_t)-1)
+
+
+
+/* Function Prototypes */
 qfind_index_t* qfind_init(void);
 void qfind_destroy(qfind_index_t *index);
 
-/* Index operations */
 int qfind_build_index(qfind_index_t *index, const char *root_path);
 int qfind_update_index(qfind_index_t *index, const char *path, bool is_add);
 int qfind_commit_updates(qfind_index_t *index);
 int add_file_to_index(qfind_index_t *index, const char *path, file_id_t file_id);
 int compress_posting_lists(qfind_index_t *index);
 
-/* Search operations */
 int qfind_search(qfind_index_t *index, query_ctx_t *query);
 int qfind_get_results(query_ctx_t *query, file_metadata_t *results, uint32_t *num_results);
 
@@ -122,19 +187,31 @@ void ffbloom_destroy(ffbloom_t bloom);
 void ffbloom_add(ffbloom_t bloom, const void *data, size_t len);
 bool ffbloom_check(ffbloom_t bloom, const void *data, size_t len);
 void ffbloom_update_secondary(ffbloom_t bloom, const void *data, size_t len);
+void ffbloom_get_candidates(const ffbloom_t bloom, trigram_t *patterns, uint32_t num_patterns, trigram_t *output, uint32_t *num_found);
+
 
 /* Trigram operations */
-void extract_trigrams(const char *str, trigram_t *trigrams, uint32_t *count);
+// void extract_trigrams(const char *str, trigram_t *trigrams, uint32_t *count, uint32_t max_count);
+void extract_trigrams(const char *str, trigram_t *trigrams, uint32_t *count, uint32_t max_count);
 uint32_t hash_trigram(trigram_t trigram, uint8_t func_idx);
 
 /* I/O operations */
 int io_context_init(io_context_t *ctx, int queue_size, bool use_sqpoll);
 int io_context_destroy(io_context_t *ctx);
+int io_register_buffers(io_context_t *ctx, struct iovec *iovs, int nr_iovs);
 int io_submit_read(io_context_t *ctx, int fd, void *buf, size_t len, off_t offset);
-int io_wait_completions(io_context_t *ctx, int min_completions);
+int io_submit_write(io_context_t *ctx, int fd, void *buf, size_t len, off_t offset);
+int io_wait_completions(io_context_t *ctx, int min_completions, io_cqe_t *cqes, int *num_cqes);
+int io_unregister_buffer(io_context_t *ctx, void *buf);
+const char *io_strerror(int error);
 
 /* Utility functions */
 void tokenize_path(const char *path, char **tokens, uint32_t *count);
-bool check_file_permission(file_metadata_t *meta, uid_t user_id, gid_t group_id);
+bool check_file_permission( const file_metadata_t *meta, uid_t user_id, gid_t group_id);
+
+ int add_watch_recursive(const char *path);
+void remove_from_index(const qfind_index_t *index, file_id_t id);
+
+int stop_realtime_updates();
 
 #endif /* QFIND_H */
