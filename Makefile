@@ -4,7 +4,7 @@ CC = gcc
 
 CFLAGS = -Wall -Wextra -O3 -march=native -pthread -std=gnu11
 
-LDFLAGS = -luring -lzstd -lxxhash -pthread
+LDFLAGS = -lm -luring -lzstd -lxxhash -pthread
 
 SRCS = main.c ffbloom.c inverted_index.c io_ops.c search.c index_updates.c qfind.c
 OBJS = $(SRCS:.c=.o)

@@ -205,76 +205,6 @@ static void* search_worker(void *arg) {
     pthread_exit(NULL);
 }
 
-int qfind_search(qfind_index_t *index, query_ctx_t *query) {
-    if (!query->query || !*query->query) return 0;
-    
-    trigram_t trigrams[MAX_TRIGRAMS];
-    uint32_t trigram_count = 0;
-    extract_trigrams(query->query, trigrams, &trigram_count, MAX_TRIGRAMS);
-
-    // Short query path (<= 2 chars)
-    if (trigram_count == 0) {
-        query->results = malloc(sizeof(file_id_t) * query->max_results);
-        query->num_results = 0;
-        search_trie(index->trie_root, query->query, 0, 
-                   query->results, &query->num_results, query->max_results);
-        return query->num_results;
-    }
-
-    // Bloom filter pre-check
-    for (uint32_t i = 0; i < trigram_count; i++) {
-        if (!ffbloom_check(index->bloom, &trigrams[i], sizeof(trigram_t))) {
-            return 0;
-        }
-        ffbloom_update_secondary(index->bloom, &trigrams[i], sizeof(trigram_t));
-    }
-
-    // Allocate result buffers
-    query->results = malloc(sizeof(file_id_t) * query->max_results);
-    query->num_results = 0;
-    if (!query->results) return -1;
-
-    // Thread setup
-    int num_threads = get_nprocs();
-    num_threads = num_threads > WORKER_THREADS ? WORKER_THREADS : num_threads;
-    pthread_t threads[WORKER_THREADS];
-    search_thread_data_t thread_data[WORKER_THREADS];
-    pthread_mutex_t result_mutex = PTHREAD_MUTEX_INITIALIZER;
-    ZSTD_DCtx *dctx = ZSTD_createDCtx();
-
-    uint32_t entries_per_thread = (index->num_entries + num_threads - 1) / num_threads;
-
-    for (int i = 0; i < num_threads; i++) {
-        thread_data[i] = (search_thread_data_t){
-            .index = index,
-            .query = query,
-            .trigrams = trigrams,
-            .trigram_count = trigram_count,
-            .start_idx = i * entries_per_thread,
-            .end_idx = (i + 1) * entries_per_thread,
-            .result_mutex = &result_mutex,
-            .dctx = dctx,
-            .local_results = malloc(sizeof(file_id_t) * RESULTS_PER_THREAD)
-        };
-        
-        pthread_create(&threads[i], NULL, search_worker, &thread_data[i]);
-    }
-
-    for (int i = 0; i < num_threads; i++) {
-        pthread_join(threads[i], NULL);
-        free(thread_data[i].local_results);
-    }
-
-    ZSTD_freeDCtx(dctx);
-    pthread_mutex_destroy(&result_mutex);
-    
-    // Sort results by relevance (simple path length heuristic)
-    qsort(query->results, query->num_results, sizeof(file_id_t), 
-         (int (*)(const void*, const void*))strcmp);
-    
-    return query->num_results;
-}
-
 bool check_file_permission(const file_metadata_t *meta, uid_t user_id, gid_t group_id) {
     if (user_id == 0) return true; // Root access
     
@@ -288,11 +218,8 @@ bool check_file_permission(const file_metadata_t *meta, uid_t user_id, gid_t gro
     
     return false;
 }
-// void extract_trigrams(const char *query, trigram_t *trigrams, uint32_t *count, uint32_t max_count) {
-//     size_t len = strlen(query);
-//     if (len < 3) return;
 
-//     for (size_t i = 0; i <= len - 3 && *count < max_count; i++) {
-//         trigrams[(*count)++] = (trigram_t){query[i], query[i+1], query[i+2]};
-//     }
-// }
+int qfind_search(qfind_index_t *index, query_ctx_t *query) {
+    // TODO: implement search logic
+    return 0;
+}

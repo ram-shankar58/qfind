@@ -31,7 +31,6 @@
 #define INDEX_BLOCK_SIZE (1 << 16)   // 64KB blocks for inverted index
 #define MAX_RESULTS 10000            // Maximum results to return
 #define IO_RINGSIZE 1024             // Size of io_uring queue
-#define DT_DIR 4  // From dirent.h
 #define POLLIN 0x001  // From sys/poll.h
 #define MAX_REG_BUFFERS 1024
 #define CQE_BATCH_SIZE 32
@@ -177,6 +176,8 @@ int qfind_update_index(qfind_index_t *index, const char *path, bool is_add);
 int qfind_commit_updates(qfind_index_t *index);
 int add_file_to_index(qfind_index_t *index, const char *path, file_id_t file_id);
 int compress_posting_lists(qfind_index_t *index);
+void remove_from_index(const qfind_index_t *index, file_id_t id);
+int stop_realtime_updates();
 
 int qfind_search(qfind_index_t *index, query_ctx_t *query);
 int qfind_get_results(query_ctx_t *query, file_metadata_t *results, uint32_t *num_results);
@@ -191,9 +192,8 @@ void ffbloom_get_candidates(const ffbloom_t bloom, trigram_t *patterns, uint32_t
 
 
 /* Trigram operations */
-// void extract_trigrams(const char *str, trigram_t *trigrams, uint32_t *count, uint32_t max_count);
-void extract_trigrams(const char *str, trigram_t *trigrams, uint32_t *count, uint32_t max_count);
 uint32_t hash_trigram(trigram_t trigram, uint8_t func_idx);
+void extract_trigrams(const char *text, trigram_t *out, size_t *out_count, size_t max_out);
 
 /* I/O operations */
 int io_context_init(io_context_t *ctx, int queue_size, bool use_sqpoll);
@@ -210,8 +210,5 @@ void tokenize_path(const char *path, char **tokens, uint32_t *count);
 bool check_file_permission( const file_metadata_t *meta, uid_t user_id, gid_t group_id);
 
  int add_watch_recursive(const char *path);
-void remove_from_index(const qfind_index_t *index, file_id_t id);
-
-int stop_realtime_updates();
 
 #endif /* QFIND_H */

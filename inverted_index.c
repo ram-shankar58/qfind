@@ -182,7 +182,7 @@ static int resize_trigram_table() {
 // 
 int add_file_to_index(qfind_index_t *index, const char *path, file_id_t file_id) {
     trigram_t trigrams[PATH_MAX];
-    uint32_t trigram_count;
+    size_t trigram_count = 0;
     extract_trigrams(path, trigrams, &trigram_count, PATH_MAX);
     
     trie_node_t *node = index->trie_root;
@@ -347,4 +347,9 @@ void cleanup_inverted_index() {
     munmap(idx.entries, idx.capacity * sizeof(trigram_entry));
     ZSTD_freeCCtx(idx.zstd_cctx);
     ZSTD_freeDCtx(idx.zstd_dctx);
+}
+
+void extract_trigrams(const char *text, trigram_t *out, size_t *out_count, size_t max_out) {
+    // TODO: implement trigram extraction logic
+    *out_count = 0;
 }
